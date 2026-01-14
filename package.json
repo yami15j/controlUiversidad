@@ -40,6 +40,8 @@
     "seed:users": "ts-node prisma/seed-users.ts",
     "seed:academic": "ts-node prisma/seed-academic.ts",
     "seed:profiles": "ts-node prisma/seed-profiles.ts",
+
+    "seed:complete": "ts-node prisma/seeds/seed-complete-test-data.ts",
     "seed:all": "npm run seed:users && npm run seed:academic && npm run seed:profiles"
   },
   "prisma": {

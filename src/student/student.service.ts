@@ -8,6 +8,118 @@ export class StudentService {
 
   constructor(private readonly prisma: PrismaProfilesService) { }
 
+  // ============================================
+  // PARTE 1: CONSULTAS DERIVADAS
+  // ============================================
+
+  /**
+   * 1. Listar todos los estudiantes activos junto con su carrera
+   */
+  async findActiveStudents(paginationDto: PaginationDto) {
+    const { page = 1, limit = 10 } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    try {
+      const [data, total] = await Promise.all([
+        this.prisma.userReference.findMany({
+          where: {
+            roleId: 3, // STUDENT
+            status: 'active' // Solo activos
+          },
+          skip,
+          take: limit,
+          include: {
+            studentProfile: {
+              include: {
+                career: true, // Incluir carrera
+                studentSubjects: {
+                  include: {
+                    subject: true
+                  }
+                }
+              }
+            }
+          }
+        }),
+        this.prisma.userReference.count({
+          where: {
+            roleId: 3,
+            status: 'active'
+          }
+        })
+      ]);
+
+      return {
+        message: 'Estudiantes activos encontrados',
+        data,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+
+    } catch (error) {
+      throw new InternalServerErrorException('Error al obtener estudiantes activos');
+    }
+  }
+
+  /**
+   * 4. Mostrar las matrículas de un estudiante en un período académico determinado
+   * Nota: Como no tenemos cycleId en StudentSubject, filtramos por el ciclo actual del estudiante
+   */
+  async findStudentEnrollmentsByPeriod(studentId: number, cycleNumber?: number) {
+    try {
+      const student = await this.prisma.userReference.findUnique({
+        where: { id: studentId },
+        include: {
+          studentProfile: {
+            include: {
+              career: true,
+              studentSubjects: {
+                where: cycleNumber ? {
+                  subject: {
+                    cicleNumber: cycleNumber
+                  }
+                } : undefined,
+                include: {
+                  subject: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!student || student.roleId !== 3) {
+        throw new NotFoundException('Estudiante no encontrado');
+      }
+
+      return {
+        message: `Matrículas del estudiante ${student.name}`,
+        student: {
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          career: student.studentProfile?.career,
+          currentCycle: student.studentProfile?.currentCicle,
+          enrollments: student.studentProfile?.studentSubjects || []
+        }
+      };
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al obtener matrículas del estudiante');
+    }
+  }
+
+  // ============================================
+  // MÉTODOS EXISTENTES
+  // ============================================
+
   async findAll(findWithPagination: PaginationDto) {
     const { page = 1, limit = 10 } = findWithPagination;
     const skip = (page - 1) * limit;
@@ -15,7 +127,7 @@ export class StudentService {
     try {
       const [data, total] = await Promise.all([
         this.prisma.userReference.findMany({
-          where: { roleId: 3 }, // 3 = STUDENT
+          where: { roleId: 3 },
           skip,
           take: limit,
           include: {
@@ -101,21 +213,17 @@ export class StudentService {
         }
       }
 
-      // Prepare update data for user (UserReference only has name, email, status)
       const userUpdateData = {
         ...(updateStudentDto.name && { name: updateStudentDto.name }),
         ...(updateStudentDto.email && { email: updateStudentDto.email }),
         ...(updateStudentDto.status && { status: updateStudentDto.status }),
-        // phone and age are not in UserReference
       };
 
-      // Prepare update data for student profile
       const profileUpdateData = {
         ...(updateStudentDto.careerId && { careerId: updateStudentDto.careerId }),
         ...(updateStudentDto.currentCicle && { currentCicle: updateStudentDto.currentCicle }),
       };
 
-      // Update user and profile
       const updatedUser = await this.prisma.userReference.update({
         where: { id },
         data: {
@@ -159,7 +267,6 @@ export class StudentService {
         throw new NotFoundException(`Student with ID ${id} not found`);
       }
 
-      // Delete will cascade to studentProfile due to the schema configuration
       await this.prisma.userReference.delete({
         where: { id }
       });
@@ -172,6 +279,4 @@ export class StudentService {
       throw new InternalServerErrorException('Error removing student');
     }
   }
-
 }
-

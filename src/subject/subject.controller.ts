@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseIntPipe } from '@nestjs/common';
 import { SubjectService } from './subject.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
@@ -24,19 +24,28 @@ export class SubjectController {
 
   @ApiOperation({ summary: 'Get a subject by ID' })
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.subjectService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.subjectService.findOne(id);
+  }
+
+  @ApiOperation({ summary: 'Get subjects by career ID' })
+  @Get('career/:careerId')
+  findByCareer(
+    @Param('careerId', ParseIntPipe) careerId: number,
+    @Query() paginationDto: PaginationDto
+  ) {
+    return this.subjectService.findByCareer(careerId, paginationDto);
   }
 
   @ApiOperation({ summary: 'Update a subject' })
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSubjectDto: UpdateSubjectDto) {
-    return this.subjectService.update(+id, updateSubjectDto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() updateSubjectDto: UpdateSubjectDto) {
+    return this.subjectService.update(id, updateSubjectDto);
   }
 
   @ApiOperation({ summary: 'Delete a subject' })
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.subjectService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.subjectService.remove(id);
   }
 }

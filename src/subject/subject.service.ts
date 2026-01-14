@@ -9,8 +9,105 @@ export class SubjectService {
   constructor(private readonly prisma: PrismaAcademicService) { }
 
   private readonly subjectIncludes = {
-    career: true
+    career: true,
+    cycle: true
   }
+
+  // ============================================
+  // PARTE 1: CONSULTAS DERIVADAS
+  // ============================================
+
+  /**
+   * 2. Obtener las materias asociadas a una carrera específica
+   */
+  async findByCareer(careerId: number, paginationDto: PaginationDto) {
+    const { page = 1, limit = 10 } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    try {
+      // Verificar que la carrera existe
+      const career = await this.prisma.career.findUnique({
+        where: { id: careerId }
+      });
+
+      if (!career) {
+        throw new NotFoundException(`Carrera con ID ${careerId} no encontrada`);
+      }
+
+      const [data, total] = await Promise.all([
+        this.prisma.subject.findMany({
+          where: {
+            careerId: careerId
+          },
+          skip,
+          take: limit,
+          include: this.subjectIncludes,
+          orderBy: {
+            cicleNumber: 'asc'
+          }
+        }),
+        this.prisma.subject.count({
+          where: {
+            careerId: careerId
+          }
+        })
+      ]);
+
+      return {
+        message: `Materias de la carrera: ${career.name}`,
+        career: {
+          id: career.id,
+          name: career.name,
+          totalCicles: career.totalCicles
+        },
+        data,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error al obtener materias por carrera');
+    }
+  }
+
+  /**
+   * Obtener materias por carrera y ciclo específico
+   */
+  async findByCareerAndCycle(careerId: number, cicleNumber: number) {
+    try {
+      const subjects = await this.prisma.subject.findMany({
+        where: {
+          careerId: careerId,
+          cicleNumber: cicleNumber
+        },
+        include: this.subjectIncludes
+      });
+
+      const career = await this.prisma.career.findUnique({
+        where: { id: careerId }
+      });
+
+      return {
+        message: `Materias del ciclo ${cicleNumber} de la carrera ${career?.name}`,
+        data: subjects,
+        total: subjects.length
+      };
+
+    } catch (error) {
+      throw new InternalServerErrorException('Error al obtener materias por carrera y ciclo');
+    }
+  }
+
+  // ============================================
+  // MÉTODOS EXISTENTES
+  // ============================================
 
   async create(createSubjectDto: CreateSubjectDto) {
     try {
